@@ -339,13 +339,27 @@ async function loadData() {
 
     const data = rows.slice(1).filter(r => r.some(c => (c || "").trim() !== ""));
 
+    // En el Sheet, "Nro Vendedor" y "Ruta" solo aparecen en la primera fila
+    // de cada bloque (como con celdas combinadas): las filas siguientes
+    // pertenecen al mismo vendedor/ruta hasta que aparece un valor nuevo.
+    // Por eso se "rellena hacia abajo" (forward-fill) cada columna por
+    // separado, en el orden en que vienen las filas.
+    let lastVendedor = "";
+    let lastRuta = "";
+
     allRows = data
-      .map(r => ({
-        vendedor: (r[idxVendedor] || "").trim(),
-        cliente: (r[idxCliente] || "").trim(),
-        ruta: (r[idxRuta] || "").trim(),
-        ccc: (r[idxCCC] || "").trim()
-      }))
+      .map(r => {
+        const vendedorRaw = (r[idxVendedor] || "").trim();
+        const rutaRaw = (r[idxRuta] || "").trim();
+        if (vendedorRaw !== "") lastVendedor = vendedorRaw;
+        if (rutaRaw !== "") lastRuta = rutaRaw;
+        return {
+          vendedor: lastVendedor,
+          ruta: lastRuta,
+          cliente: (r[idxCliente] || "").trim(),
+          ccc: (r[idxCCC] || "").trim()
+        };
+      })
       .filter(r => r.cliente !== "" && r.ccc === "");
 
     const vendedores = [...new Set(allRows.map(r => r.vendedor).filter(v => v !== ""))]
