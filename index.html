@@ -261,6 +261,17 @@ function populateSelect(select, values, placeholderLabel) {
   if (values.includes(current)) select.value = current;
 }
 
+function updateRutaOptions() {
+  // Las rutas que se ofrecen dependen del vendedor elegido: si hay un
+  // vendedor seleccionado, solo se listan las rutas que existen dentro de
+  // sus clientes; si no hay vendedor elegido, se listan todas.
+  const vendedorSel = document.getElementById("f-vendedor").value;
+  const relevantRows = vendedorSel ? allRows.filter(r => r.vendedor === vendedorSel) : allRows;
+  const rutas = [...new Set(relevantRows.map(r => r.ruta).filter(v => v !== ""))]
+    .sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
+  populateSelect(document.getElementById("f-ruta"), rutas, "Todas");
+}
+
 function render() {
   const vendedorSel = document.getElementById("f-vendedor").value;
   const rutaSel = document.getElementById("f-ruta").value;
@@ -364,11 +375,9 @@ async function loadData() {
 
     const vendedores = [...new Set(allRows.map(r => r.vendedor).filter(v => v !== ""))]
       .sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
-    const rutas = [...new Set(allRows.map(r => r.ruta).filter(v => v !== ""))]
-      .sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
 
     populateSelect(document.getElementById("f-vendedor"), vendedores, "Todos");
-    populateSelect(document.getElementById("f-ruta"), rutas, "Todas");
+    updateRutaOptions();
 
     render();
   } catch (err) {
@@ -381,13 +390,20 @@ async function loadData() {
   }
 }
 
-document.getElementById("f-vendedor").addEventListener("change", render);
+document.getElementById("f-vendedor").addEventListener("change", () => {
+  // Al cambiar de vendedor, la ruta elegida podría ya no pertenecerle:
+  // se recalculan las opciones de ruta y se limpia la selección previa.
+  document.getElementById("f-ruta").value = "";
+  updateRutaOptions();
+  render();
+});
 document.getElementById("f-ruta").addEventListener("change", render);
 document.getElementById("f-search").addEventListener("input", render);
 document.getElementById("clear-filters").addEventListener("click", () => {
   document.getElementById("f-vendedor").value = "";
   document.getElementById("f-ruta").value = "";
   document.getElementById("f-search").value = "";
+  updateRutaOptions();
   render();
 });
 document.getElementById("refresh-btn").addEventListener("click", loadData);
