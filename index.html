@@ -249,7 +249,7 @@
     <div class="filters">
       <div class="field">
         <label for="f-vendedor">Nro Vendedor</label>
-        <input type="text" id="f-vendedor" list="vendedor-list" placeholder="Todos (escribí para buscar)" autocomplete="off">
+        <input type="text" id="f-vendedor" list="vendedor-list" placeholder="Todos (número exacto o elegí de la lista)" autocomplete="off">
         <datalist id="vendedor-list"></datalist>
       </div>
       <div class="field" id="ruta-field">
@@ -368,9 +368,19 @@ function currentVendedorFilter() {
   return document.getElementById("f-vendedor").value.trim().toLowerCase();
 }
 
+// El Cliente muestra "CODIGO - NOMBRE". Se compara por coincidencia exacta
+// (del código solo, o del texto completo) para que escribir "5" traiga
+// únicamente al vendedor 5, y no 25, 54, 500, etc.
+function vendorCode(v) {
+  const idx = (v || "").indexOf(" - ");
+  return idx === -1 ? (v || "").trim() : v.slice(0, idx).trim();
+}
+
 function matchesVendedor(rowVendedor, filterText) {
   if (!filterText) return true;
-  return (rowVendedor || "").toLowerCase().includes(filterText);
+  const code = vendorCode(rowVendedor).toLowerCase();
+  const full = (rowVendedor || "").toLowerCase();
+  return code === filterText || full === filterText;
 }
 
 // --- Multiselect de Ruta ---
