@@ -1,0 +1,9 @@
+{
+  "name": "no-compradores-sheet",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Listado de no compradores del mes en curso, filtrable por vendedor y ruta, alimentado en vivo desde un Google Sheet publicado.",
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}
