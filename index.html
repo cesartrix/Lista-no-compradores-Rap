@@ -31,6 +31,20 @@
     margin:0 0 6px;
     letter-spacing:-0.01em;
   }
+  header > p{
+    color:var(--text-muted);
+    font-size:0.92rem;
+    margin:0 0 32px;
+  }
+
+  .data-section{margin-bottom:44px;}
+  .data-section h2{
+    font-size:1.2rem;
+    font-weight:700;
+    margin:0 0 6px;
+    letter-spacing:-0.01em;
+  }
+
   .meta-row{
     display:flex;
     flex-wrap:wrap;
@@ -38,10 +52,10 @@
     align-items:center;
     color:var(--text-muted);
     font-size:0.92rem;
-    margin-bottom:24px;
+    margin-bottom:20px;
   }
   .meta-row .dot{color:var(--border);}
-  #refresh-btn{
+  .refresh-btn{
     border:1px solid var(--border);
     background:var(--surface);
     color:var(--accent);
@@ -51,8 +65,8 @@
     cursor:pointer;
     font-weight:600;
   }
-  #refresh-btn:hover{background:var(--accent-soft);}
-  #refresh-btn:disabled{opacity:0.5;cursor:default;}
+  .refresh-btn:hover{background:var(--accent-soft);}
+  .refresh-btn:disabled{opacity:0.5;cursor:default;}
 
   .panel{
     background:var(--surface);
@@ -221,8 +235,13 @@
     padding:16px 18px;
     font-size:0.92rem;
   }
+  hr.section-divider{
+    border:none;
+    border-top:1px solid var(--border);
+    margin:0 0 40px;
+  }
   footer{
-    margin-top:28px;
+    margin-top:8px;
     color:var(--text-muted);
     font-size:0.78rem;
     text-align:center;
@@ -237,67 +256,26 @@
 <div class="wrap">
   <header>
     <h1>Listado de no compradores de mes en curso</h1>
-    <div class="meta-row">
-      <span id="last-updated">Cargando datos del Sheet…</span>
-      <span class="dot">•</span>
-      <span id="fetched-at"></span>
-      <button id="refresh-btn" type="button">Actualizar datos</button>
-    </div>
+    <p>Los datos se obtienen en vivo desde el Google Sheet publicado. Se considera "no comprador" a todo cliente cuya columna "CCC x Bultos" está vacía.</p>
   </header>
 
-  <div class="panel">
-    <div class="filters">
-      <div class="field">
-        <label for="f-vendedor">Nro Vendedor</label>
-        <input type="text" id="f-vendedor" list="vendedor-list" placeholder="Todos (número exacto o elegí de la lista)" autocomplete="off">
-        <datalist id="vendedor-list"></datalist>
-      </div>
-      <div class="field" id="ruta-field">
-        <label id="ruta-label">Ruta</label>
-        <div class="multiselect" id="ruta-multiselect">
-          <button type="button" id="ruta-toggle" class="multiselect-toggle" aria-haspopup="true" aria-expanded="false">Todas</button>
-          <div class="multiselect-panel" id="ruta-panel" hidden>
-            <div class="multiselect-actions">
-              <button type="button" id="ruta-select-all">Seleccionar todas</button>
-              <button type="button" id="ruta-select-none">Ninguna</button>
-            </div>
-            <div class="multiselect-options" id="ruta-options"></div>
-          </div>
-        </div>
-      </div>
-      <div class="field grow">
-        <label for="f-search">Buscar cliente</label>
-        <input type="text" id="f-search" placeholder="Nombre o código de cliente...">
-      </div>
-      <button class="clear-btn" id="clear-filters" type="button">Limpiar filtros</button>
-    </div>
-  </div>
+  <section class="data-section" data-key="main" data-title="No compradores" data-endpoint="/api/sheet"></section>
 
-  <div class="actions-row">
-    <button class="action-btn" id="export-pdf-btn" type="button">⬇ Exportar PDF</button>
-    <button class="action-btn" id="copy-btn" type="button">⧉ Copiar al portapapeles</button>
-  </div>
+  <hr class="section-divider">
 
-  <div id="content">
-    <div class="empty-state">Cargando…</div>
-  </div>
+  <section class="data-section" data-key="colonias" data-title="No compradores Las Colonias" data-endpoint="/api/sheet-colonias"></section>
 
   <footer>
-    Los datos se obtienen en vivo desde el Google Sheet publicado (vía la función serverless /api/sheet). Se considera "no comprador" a todo cliente cuya columna "CCC x Bultos" está vacía.
+    Cada sección consulta su propia hoja del Sheet a través de una función serverless (para evitar el bloqueo de CORS de Google).
   </footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script>
-// El CSV ya no se pide directo a Google desde el navegador (eso falla por
-// CORS: Google no habilita Access-Control-Allow-Origin en ese endpoint).
-// En su lugar se pide a nuestra propia función serverless /api/sheet.js,
-// que hace el fetch del lado del servidor y no tiene restricción de CORS.
-const DATA_ENDPOINT = "/api/sheet";
-
-let allRows = [];
-let selectedRutas = new Set(); // vacío = "todas"
+// -------------------------------------------------------------------
+// Helpers genéricos (compartidos por todas las secciones)
+// -------------------------------------------------------------------
 
 function parseCSV(text) {
   const rows = [];
@@ -354,20 +332,6 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
-function populateDatalist(values) {
-  const list = document.getElementById("vendedor-list");
-  list.innerHTML = "";
-  values.forEach(v => {
-    const opt = document.createElement("option");
-    opt.value = v;
-    list.appendChild(opt);
-  });
-}
-
-function currentVendedorFilter() {
-  return document.getElementById("f-vendedor").value.trim().toLowerCase();
-}
-
 // El Cliente muestra "CODIGO - NOMBRE". Se compara por coincidencia exacta
 // (del código solo, o del texto completo) para que escribir "5" traiga
 // únicamente al vendedor 5, y no 25, 54, 500, etc.
@@ -383,197 +347,6 @@ function matchesVendedor(rowVendedor, filterText) {
   return code === filterText || full === filterText;
 }
 
-// --- Multiselect de Ruta ---
-
-function relevantRutaRows() {
-  const vendedorFilter = currentVendedorFilter();
-  return vendedorFilter ? allRows.filter(r => matchesVendedor(r.vendedor, vendedorFilter)) : allRows;
-}
-
-function updateRutaOptions() {
-  // Las rutas que se ofrecen dependen del vendedor tipeado: si hay texto en
-  // Nro Vendedor, solo se listan las rutas que existen dentro de esos
-  // clientes; si no hay texto, se listan todas.
-  const rutas = [...new Set(relevantRutaRows().map(r => r.ruta).filter(v => v !== ""))]
-    .sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
-
-  // Descartar de la selección actual las rutas que ya no son válidas para
-  // el vendedor tipeado.
-  selectedRutas.forEach(r => { if (!rutas.includes(r)) selectedRutas.delete(r); });
-
-  const optionsWrap = document.getElementById("ruta-options");
-  optionsWrap.innerHTML = "";
-  if (rutas.length === 0) {
-    optionsWrap.innerHTML = '<div class="empty">No hay rutas para este filtro.</div>';
-  } else {
-    rutas.forEach(r => {
-      const id = "ruta-opt-" + r.replace(/[^a-zA-Z0-9]/g, "_");
-      const label = document.createElement("label");
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.value = r;
-      cb.id = id;
-      cb.checked = selectedRutas.has(r);
-      cb.addEventListener("change", () => {
-        if (cb.checked) selectedRutas.add(r); else selectedRutas.delete(r);
-        updateRutaToggleLabel();
-        render();
-      });
-      label.appendChild(cb);
-      label.appendChild(document.createTextNode(r));
-      optionsWrap.appendChild(label);
-    });
-  }
-  updateRutaToggleLabel();
-}
-
-function updateRutaToggleLabel() {
-  const btn = document.getElementById("ruta-toggle");
-  if (selectedRutas.size === 0) btn.textContent = "Todas";
-  else if (selectedRutas.size === 1) btn.textContent = [...selectedRutas][0];
-  else btn.textContent = selectedRutas.size + " rutas seleccionadas";
-}
-
-function toggleRutaPanel(forceOpen) {
-  const panel = document.getElementById("ruta-panel");
-  const btn = document.getElementById("ruta-toggle");
-  const shouldOpen = forceOpen !== undefined ? forceOpen : panel.hidden;
-  panel.hidden = !shouldOpen;
-  btn.setAttribute("aria-expanded", String(shouldOpen));
-}
-
-document.getElementById("ruta-toggle").addEventListener("click", (e) => {
-  e.stopPropagation();
-  toggleRutaPanel();
-});
-document.addEventListener("click", (e) => {
-  const ms = document.getElementById("ruta-multiselect");
-  if (!ms.contains(e.target)) toggleRutaPanel(false);
-});
-document.getElementById("ruta-select-all").addEventListener("click", () => {
-  const rutas = [...new Set(relevantRutaRows().map(r => r.ruta).filter(v => v !== ""))];
-  selectedRutas = new Set(rutas);
-  updateRutaOptions();
-  render();
-});
-document.getElementById("ruta-select-none").addEventListener("click", () => {
-  selectedRutas.clear();
-  updateRutaOptions();
-  render();
-});
-
-// --- Filtrado + render ---
-
-function getFilteredRows() {
-  const vendedorFilter = currentVendedorFilter();
-  const search = document.getElementById("f-search").value.trim().toLowerCase();
-
-  return allRows
-    .filter(r => {
-      if (!matchesVendedor(r.vendedor, vendedorFilter)) return false;
-      if (selectedRutas.size > 0 && !selectedRutas.has(r.ruta)) return false;
-      if (search && !r.cliente.toLowerCase().includes(search)) return false;
-      return true;
-    })
-    .slice()
-    .sort((a, b) => a.cliente.localeCompare(b.cliente, "es"));
-}
-
-function render() {
-  const content = document.getElementById("content");
-
-  if (allRows.length === 0) {
-    content.innerHTML = '<div class="empty-state">No se encontraron datos en el Sheet.</div>';
-    return;
-  }
-
-  const filtered = getFilteredRows();
-
-  if (filtered.length === 0) {
-    content.innerHTML = '<div class="empty-state">No hay clientes sin compra que coincidan con los filtros seleccionados.</div>';
-    return;
-  }
-
-  let html = '<div class="status-line"><span><strong>' + filtered.length + '</strong> cliente(s) sin compra en el mes en curso</span></div>';
-  html += '<table><thead><tr><th>Nro Vendedor</th><th>Ruta</th><th>Cliente</th></tr></thead><tbody>';
-  filtered.forEach(r => {
-    html += "<tr><td>" + (r.vendedor || "—") + "</td><td>" + (r.ruta || "—") + "</td><td>" + escapeHtml(r.cliente) + "</td></tr>";
-  });
-  html += "</tbody></table>";
-  content.innerHTML = html;
-}
-
-// --- Exportar PDF ---
-
-function exportPDF() {
-  const rows = getFilteredRows();
-  if (rows.length === 0) {
-    flashButton(document.getElementById("export-pdf-btn"), "Sin datos para exportar");
-    return;
-  }
-  if (!window.jspdf) {
-    flashButton(document.getElementById("export-pdf-btn"), "No se pudo cargar el generador de PDF");
-    return;
-  }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: "portrait", unit: "pt" });
-
-  doc.setFontSize(14);
-  doc.text("Listado de no compradores de mes en curso", 40, 40);
-
-  doc.setFontSize(9);
-  doc.setTextColor(110, 110, 110);
-  const updatedText = document.getElementById("last-updated").textContent.replace(/\s+/g, " ").trim();
-  doc.text(updatedText, 40, 58);
-  doc.text(rows.length + " cliente(s) sin compra (con los filtros aplicados)", 40, 72);
-
-  doc.autoTable({
-    startY: 88,
-    head: [["Nro Vendedor", "Ruta", "Cliente"]],
-    body: rows.map(r => [r.vendedor || "—", r.ruta || "—", r.cliente]),
-    styles: { fontSize: 9, cellPadding: 5 },
-    headStyles: { fillColor: [52, 87, 213], textColor: 255 },
-    alternateRowStyles: { fillColor: [247, 248, 250] }
-  });
-
-  const stamp = new Date().toISOString().slice(0, 10);
-  doc.save("no-compradores-" + stamp + ".pdf");
-}
-
-// --- Copiar al portapapeles ---
-
-async function copyToClipboard() {
-  const btn = document.getElementById("copy-btn");
-  const rows = getFilteredRows();
-  if (rows.length === 0) {
-    flashButton(btn, "Sin datos para copiar");
-    return;
-  }
-
-  const header = ["Nro Vendedor", "Ruta", "Cliente"].join("\t");
-  const lines = rows.map(r => [r.vendedor || "", r.ruta || "", r.cliente].join("\t"));
-  const text = [header, ...lines].join("\n");
-
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-    }
-    flashButton(btn, "✓ Copiado");
-  } catch (err) {
-    flashButton(btn, "No se pudo copiar");
-  }
-}
-
 function flashButton(btn, message) {
   const original = btn.textContent;
   btn.textContent = message;
@@ -584,105 +357,364 @@ function flashButton(btn, message) {
   }, 1600);
 }
 
-document.getElementById("export-pdf-btn").addEventListener("click", exportPDF);
-document.getElementById("copy-btn").addEventListener("click", copyToClipboard);
+// -------------------------------------------------------------------
+// Fábrica de secciones: cada sección arma su propio HTML, mantiene su
+// propio estado (allRows / selectedRutas) y consulta su propio endpoint.
+// Así "No compradores" y "No compradores Las Colonias" quedan totalmente
+// independientes entre sí aunque compartan la misma lógica y diseño.
+// -------------------------------------------------------------------
 
-// --- Carga de datos ---
+function createSection(root) {
+  const key = root.dataset.key;
+  const title = root.dataset.title;
+  const endpoint = root.dataset.endpoint;
+  const id = (suffix) => key + "-" + suffix;
 
-async function loadData() {
-  const btn = document.getElementById("refresh-btn");
-  btn.disabled = true;
-  document.getElementById("last-updated").textContent = "Cargando datos del Sheet…";
-  document.getElementById("content").innerHTML = '<div class="empty-state">Cargando…</div>';
+  root.innerHTML = `
+    <h2>${escapeHtml(title)}</h2>
+    <div class="meta-row">
+      <span id="${id('last-updated')}">Cargando datos del Sheet…</span>
+      <span class="dot">•</span>
+      <span id="${id('fetched-at')}"></span>
+      <button id="${id('refresh-btn')}" class="refresh-btn" type="button">Actualizar datos</button>
+    </div>
 
-  try {
-    const res = await fetch(DATA_ENDPOINT + "?_ts=" + Date.now(), { cache: "no-store" });
-    const payload = await res.json();
+    <div class="panel">
+      <div class="filters">
+        <div class="field">
+          <label for="${id('f-vendedor')}">Nro Vendedor</label>
+          <input type="text" id="${id('f-vendedor')}" list="${id('vendedor-list')}" placeholder="Todos (número exacto o elegí de la lista)" autocomplete="off">
+          <datalist id="${id('vendedor-list')}"></datalist>
+        </div>
+        <div class="field">
+          <label id="${id('ruta-label')}">Ruta</label>
+          <div class="multiselect" id="${id('ruta-multiselect')}">
+            <button type="button" id="${id('ruta-toggle')}" class="multiselect-toggle" aria-haspopup="true" aria-expanded="false">Todas</button>
+            <div class="multiselect-panel" id="${id('ruta-panel')}" hidden>
+              <div class="multiselect-actions">
+                <button type="button" id="${id('ruta-select-all')}">Seleccionar todas</button>
+                <button type="button" id="${id('ruta-select-none')}">Ninguna</button>
+              </div>
+              <div class="multiselect-options" id="${id('ruta-options')}"></div>
+            </div>
+          </div>
+        </div>
+        <div class="field grow">
+          <label for="${id('f-search')}">Buscar cliente</label>
+          <input type="text" id="${id('f-search')}" placeholder="Nombre o código de cliente...">
+        </div>
+        <button class="clear-btn" id="${id('clear-filters')}" type="button">Limpiar filtros</button>
+      </div>
+    </div>
 
-    if (!res.ok) {
-      throw new Error(payload && payload.error ? payload.error : ("HTTP " + res.status));
-    }
+    <div class="actions-row">
+      <button class="action-btn" id="${id('export-pdf-btn')}" type="button">⬇ Exportar PDF</button>
+      <button class="action-btn" id="${id('copy-btn')}" type="button">⧉ Copiar al portapapeles</button>
+    </div>
 
-    const now = new Date();
-    document.getElementById("fetched-at").textContent = "Última consulta: " + fmtDate(now);
+    <div id="${id('content')}">
+      <div class="empty-state">Cargando…</div>
+    </div>
+  `;
 
-    if (payload.lastModified) {
-      document.getElementById("last-updated").innerHTML =
-        'Última actualización del Sheet: <strong>' + fmtDate(new Date(payload.lastModified)) + "</strong>";
-    } else {
-      document.getElementById("last-updated").innerHTML =
-        'Última actualización del Sheet: <span title="El Sheet no expone esta fecha; se muestra la hora de la última consulta">no disponible</span>';
-    }
+  const $ = (suffix) => document.getElementById(id(suffix));
 
-    const rows = parseCSV(payload.csv || "");
-    if (rows.length === 0) { allRows = []; render(); return; }
+  let allRows = [];
+  let selectedRutas = new Set(); // vacío = "todas"
 
-    const header = rows[0].map(normHeader);
-    const idxVendedor = header.findIndex(h => h.includes("vendedor"));
-    const idxCliente = header.findIndex(h => h.includes("cliente") && !h.includes("cartera"));
-    const idxRuta = header.findIndex(h => h.includes("ruta"));
-    const idxCCC = header.findIndex(h => h.includes("ccc") || h.includes("bultos"));
+  function currentVendedorFilter() {
+    return $('f-vendedor').value.trim().toLowerCase();
+  }
 
-    const data = rows.slice(1).filter(r => r.some(c => (c || "").trim() !== ""));
+  function relevantRutaRows() {
+    const vendedorFilter = currentVendedorFilter();
+    return vendedorFilter ? allRows.filter(r => matchesVendedor(r.vendedor, vendedorFilter)) : allRows;
+  }
 
-    // En el Sheet, "Nro Vendedor" y "Ruta" solo aparecen en la primera fila
-    // de cada bloque (como con celdas combinadas): las filas siguientes
-    // pertenecen al mismo vendedor/ruta hasta que aparece un valor nuevo.
-    // Por eso se "rellena hacia abajo" (forward-fill) cada columna por
-    // separado, en el orden en que vienen las filas.
-    let lastVendedor = "";
-    let lastRuta = "";
-
-    allRows = data
-      .map(r => {
-        const vendedorRaw = (r[idxVendedor] || "").trim();
-        const rutaRaw = (r[idxRuta] || "").trim();
-        if (vendedorRaw !== "") lastVendedor = vendedorRaw;
-        if (rutaRaw !== "") lastRuta = rutaRaw;
-        return {
-          vendedor: lastVendedor,
-          ruta: lastRuta,
-          cliente: (r[idxCliente] || "").trim(),
-          ccc: (r[idxCCC] || "").trim()
-        };
-      })
-      .filter(r => r.cliente !== "" && r.ccc === "");
-
-    const vendedores = [...new Set(allRows.map(r => r.vendedor).filter(v => v !== ""))]
+  function updateRutaOptions() {
+    const rutas = [...new Set(relevantRutaRows().map(r => r.ruta).filter(v => v !== ""))]
       .sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
 
-    populateDatalist(vendedores);
-    updateRutaOptions();
+    selectedRutas.forEach(r => { if (!rutas.includes(r)) selectedRutas.delete(r); });
 
-    render();
-  } catch (err) {
-    document.getElementById("last-updated").textContent = "No se pudo cargar el Sheet.";
-    document.getElementById("content").innerHTML =
-      '<div class="error-box">Ocurrió un error al obtener los datos del Sheet: ' + escapeHtml(err.message) +
-      '. Probá "Actualizar datos". Si el error persiste, revisá que el Sheet siga publicado (Archivo → Compartir → Publicar en la Web) y que la función /api/sheet esté desplegada en Vercel.</div>';
-  } finally {
-    btn.disabled = false;
+    const optionsWrap = $('ruta-options');
+    optionsWrap.innerHTML = "";
+    if (rutas.length === 0) {
+      optionsWrap.innerHTML = '<div class="empty">No hay rutas para este filtro.</div>';
+    } else {
+      rutas.forEach(r => {
+        const optId = id('ruta-opt-' + r.replace(/[^a-zA-Z0-9]/g, "_"));
+        const label = document.createElement("label");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.value = r;
+        cb.id = optId;
+        cb.checked = selectedRutas.has(r);
+        cb.addEventListener("change", () => {
+          if (cb.checked) selectedRutas.add(r); else selectedRutas.delete(r);
+          updateRutaToggleLabel();
+          render();
+        });
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(r));
+        optionsWrap.appendChild(label);
+      });
+    }
+    updateRutaToggleLabel();
   }
+
+  function updateRutaToggleLabel() {
+    const btn = $('ruta-toggle');
+    if (selectedRutas.size === 0) btn.textContent = "Todas";
+    else if (selectedRutas.size === 1) btn.textContent = [...selectedRutas][0];
+    else btn.textContent = selectedRutas.size + " rutas seleccionadas";
+  }
+
+  function toggleRutaPanel(forceOpen) {
+    const panel = $('ruta-panel');
+    const btn = $('ruta-toggle');
+    const shouldOpen = forceOpen !== undefined ? forceOpen : panel.hidden;
+    panel.hidden = !shouldOpen;
+    btn.setAttribute("aria-expanded", String(shouldOpen));
+  }
+
+  $('ruta-toggle').addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleRutaPanel();
+  });
+  document.addEventListener("click", (e) => {
+    const ms = $('ruta-multiselect');
+    if (!ms.contains(e.target)) toggleRutaPanel(false);
+  });
+  $('ruta-select-all').addEventListener("click", () => {
+    const rutas = [...new Set(relevantRutaRows().map(r => r.ruta).filter(v => v !== ""))];
+    selectedRutas = new Set(rutas);
+    updateRutaOptions();
+    render();
+  });
+  $('ruta-select-none').addEventListener("click", () => {
+    selectedRutas.clear();
+    updateRutaOptions();
+    render();
+  });
+
+  function getFilteredRows() {
+    const vendedorFilter = currentVendedorFilter();
+    const search = $('f-search').value.trim().toLowerCase();
+
+    return allRows
+      .filter(r => {
+        if (!matchesVendedor(r.vendedor, vendedorFilter)) return false;
+        if (selectedRutas.size > 0 && !selectedRutas.has(r.ruta)) return false;
+        if (search && !r.cliente.toLowerCase().includes(search)) return false;
+        return true;
+      })
+      .slice()
+      .sort((a, b) => a.cliente.localeCompare(b.cliente, "es"));
+  }
+
+  function render() {
+    const content = $('content');
+
+    if (allRows.length === 0) {
+      content.innerHTML = '<div class="empty-state">No se encontraron datos en el Sheet.</div>';
+      return;
+    }
+
+    const filtered = getFilteredRows();
+
+    if (filtered.length === 0) {
+      content.innerHTML = '<div class="empty-state">No hay clientes sin compra que coincidan con los filtros seleccionados.</div>';
+      return;
+    }
+
+    let html = '<div class="status-line"><span><strong>' + filtered.length + '</strong> cliente(s) sin compra en el mes en curso</span></div>';
+    html += '<table><thead><tr><th>Nro Vendedor</th><th>Ruta</th><th>Cliente</th></tr></thead><tbody>';
+    filtered.forEach(r => {
+      html += "<tr><td>" + (r.vendedor || "—") + "</td><td>" + (r.ruta || "—") + "</td><td>" + escapeHtml(r.cliente) + "</td></tr>";
+    });
+    html += "</tbody></table>";
+    content.innerHTML = html;
+  }
+
+  function exportPDF() {
+    const rows = getFilteredRows();
+    const btn = $('export-pdf-btn');
+    if (rows.length === 0) { flashButton(btn, "Sin datos para exportar"); return; }
+    if (!window.jspdf) { flashButton(btn, "No se pudo cargar el generador de PDF"); return; }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "portrait", unit: "pt" });
+
+    doc.setFontSize(14);
+    doc.text(title, 40, 40);
+
+    doc.setFontSize(9);
+    doc.setTextColor(110, 110, 110);
+    const updatedText = $('last-updated').textContent.replace(/\s+/g, " ").trim();
+    doc.text(updatedText, 40, 58);
+    doc.text(rows.length + " cliente(s) sin compra (con los filtros aplicados)", 40, 72);
+
+    doc.autoTable({
+      startY: 88,
+      head: [["Nro Vendedor", "Ruta", "Cliente"]],
+      body: rows.map(r => [r.vendedor || "—", r.ruta || "—", r.cliente]),
+      styles: { fontSize: 9, cellPadding: 5 },
+      headStyles: { fillColor: [52, 87, 213], textColor: 255 },
+      alternateRowStyles: { fillColor: [247, 248, 250] }
+    });
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    const fileSlug = key === "main" ? "no-compradores" : "no-compradores-" + key;
+    doc.save(fileSlug + "-" + stamp + ".pdf");
+  }
+
+  async function copyToClipboard() {
+    const btn = $('copy-btn');
+    const rows = getFilteredRows();
+    if (rows.length === 0) { flashButton(btn, "Sin datos para copiar"); return; }
+
+    const header = ["Nro Vendedor", "Ruta", "Cliente"].join("\t");
+    const lines = rows.map(r => [r.vendedor || "", r.ruta || "", r.cliente].join("\t"));
+    const text = [header, ...lines].join("\n");
+
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      flashButton(btn, "✓ Copiado");
+    } catch (err) {
+      flashButton(btn, "No se pudo copiar");
+    }
+  }
+
+  $('export-pdf-btn').addEventListener("click", exportPDF);
+  $('copy-btn').addEventListener("click", copyToClipboard);
+
+  async function loadData() {
+    const btn = $('refresh-btn');
+    btn.disabled = true;
+    $('last-updated').textContent = "Cargando datos del Sheet…";
+    $('content').innerHTML = '<div class="empty-state">Cargando…</div>';
+
+    try {
+      const res = await fetch(endpoint + "?_ts=" + Date.now(), { cache: "no-store" });
+      const payload = await res.json();
+
+      if (!res.ok) {
+        throw new Error(payload && payload.error ? payload.error : ("HTTP " + res.status));
+      }
+
+      const now = new Date();
+      $('fetched-at').textContent = "Última consulta: " + fmtDate(now);
+
+      if (payload.lastModified) {
+        $('last-updated').innerHTML =
+          'Última actualización del Sheet: <strong>' + fmtDate(new Date(payload.lastModified)) + "</strong>";
+      } else {
+        $('last-updated').innerHTML =
+          'Última actualización del Sheet: <span title="El Sheet no expone esta fecha; se muestra la hora de la última consulta">no disponible</span>';
+      }
+
+      const rows = parseCSV(payload.csv || "");
+      if (rows.length === 0) { allRows = []; render(); return; }
+
+      // El Sheet puede traer filas extra arriba del encabezado real (por
+      // ejemplo un bloque de "Filtros" con el período seleccionado). En vez
+      // de asumir que la fila 0 es el encabezado, se busca la primera fila
+      // que efectivamente contenga las columnas "vendedor" y "cliente".
+      let headerRowIndex = rows.findIndex(r => {
+        const norm = r.map(normHeader);
+        return norm.some(h => h.includes("vendedor")) && norm.some(h => h.includes("cliente") && !h.includes("cartera"));
+      });
+      if (headerRowIndex === -1) headerRowIndex = 0;
+
+      const header = rows[headerRowIndex].map(normHeader);
+      const idxVendedor = header.findIndex(h => h.includes("vendedor"));
+      const idxCliente = header.findIndex(h => h.includes("cliente") && !h.includes("cartera"));
+      const idxRuta = header.findIndex(h => h.includes("ruta"));
+      const idxCCC = header.findIndex(h => h.includes("ccc") || h.includes("bultos"));
+
+      if (idxVendedor === -1 || idxCliente === -1 || idxCCC === -1) {
+        throw new Error("No se encontraron las columnas esperadas (Nro Vendedor / Cliente / CCC x Bultos) en el Sheet.");
+      }
+
+      const data = rows.slice(headerRowIndex + 1).filter(r => r.some(c => (c || "").trim() !== ""));
+
+      // En el Sheet, "Nro Vendedor" y "Ruta" solo aparecen en la primera fila
+      // de cada bloque (como con celdas combinadas): las filas siguientes
+      // pertenecen al mismo vendedor/ruta hasta que aparece un valor nuevo.
+      // Por eso se "rellena hacia abajo" (forward-fill) cada columna por
+      // separado, en el orden en que vienen las filas.
+      let lastVendedor = "";
+      let lastRuta = "";
+
+      allRows = data
+        .map(r => {
+          const vendedorRaw = (r[idxVendedor] || "").trim();
+          const rutaRaw = (r[idxRuta] || "").trim();
+          if (vendedorRaw !== "") lastVendedor = vendedorRaw;
+          if (rutaRaw !== "") lastRuta = rutaRaw;
+          return {
+            vendedor: lastVendedor,
+            ruta: lastRuta,
+            cliente: (r[idxCliente] || "").trim(),
+            ccc: (r[idxCCC] || "").trim()
+          };
+        })
+        .filter(r => r.cliente !== "" && r.ccc === "");
+
+      const vendedores = [...new Set(allRows.map(r => r.vendedor).filter(v => v !== ""))]
+        .sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
+
+      const list = $('vendedor-list');
+      list.innerHTML = "";
+      vendedores.forEach(v => {
+        const opt = document.createElement("option");
+        opt.value = v;
+        list.appendChild(opt);
+      });
+
+      updateRutaOptions();
+      render();
+    } catch (err) {
+      $('last-updated').textContent = "No se pudo cargar el Sheet.";
+      $('content').innerHTML =
+        '<div class="error-box">Ocurrió un error al obtener los datos del Sheet: ' + escapeHtml(err.message) +
+        '. Probá "Actualizar datos". Si el error persiste, revisá que el Sheet siga publicado (Archivo → Compartir → Publicar en la Web) y que la función ' + escapeHtml(endpoint) + ' esté desplegada en Vercel.</div>';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  $('f-vendedor').addEventListener("input", () => {
+    updateRutaOptions();
+    render();
+  });
+  $('f-search').addEventListener("input", render);
+  $('clear-filters').addEventListener("click", () => {
+    $('f-vendedor').value = "";
+    $('f-search').value = "";
+    selectedRutas.clear();
+    updateRutaOptions();
+    render();
+  });
+  $('refresh-btn').addEventListener("click", loadData);
+
+  loadData();
 }
 
-document.getElementById("f-vendedor").addEventListener("input", () => {
-  // Al cambiar el vendedor tipeado, la ruta elegida podría ya no
-  // pertenecerle: se recalculan las opciones (updateRutaOptions ya
-  // descarta las que no correspondan) y se vuelve a renderizar.
-  updateRutaOptions();
-  render();
-});
-document.getElementById("f-search").addEventListener("input", render);
-document.getElementById("clear-filters").addEventListener("click", () => {
-  document.getElementById("f-vendedor").value = "";
-  document.getElementById("f-search").value = "";
-  selectedRutas.clear();
-  updateRutaOptions();
-  render();
-});
-document.getElementById("refresh-btn").addEventListener("click", loadData);
-
-loadData();
+document.querySelectorAll(".data-section").forEach(createSection);
 </script>
 </body>
 </html>
