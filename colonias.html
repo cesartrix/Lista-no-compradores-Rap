@@ -3,21 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Listado de no compradores de mes en curso</title>
+<title>No compradores Las Colonias</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>Listado de no compradores de mes en curso</h1>
+    <h1>No compradores Las Colonias</h1>
     <p>Los datos se obtienen en vivo desde el Google Sheet publicado. Se considera "no comprador" a todo cliente cuya columna "CCC x Bultos" está vacía.</p>
   </header>
 
   <div class="nav-row">
-    <a href="colonias.html">Ir a No compradores Las Colonias →</a>
+    <a href="index.html">← Volver a No compradores</a>
   </div>
 
-  <section class="data-section" data-key="main" data-title="No compradores" data-endpoint="/api/sheet"></section>
+  <section class="data-section" data-key="colonias" data-title="No compradores Las Colonias" data-endpoint="/api/sheet-colonias"></section>
 
   <footer>
     Los datos se consultan a través de una función serverless (para evitar el bloqueo de CORS de Google).
