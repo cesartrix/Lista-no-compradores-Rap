@@ -82,12 +82,25 @@ async function login() {
   return sid.includes('=') ? sid : `JSESSIONID=${sid}`;
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Chess permite una sola consulta a la vez por usuario: si hay una en curso
+// responde 403 "Existe una ejecución pendiente de finalizar". En ese caso esperamos y reintentamos.
 async function chessGet(cookie, path, params = {}) {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
   const url = `${BASE}${path}${qs.toString() ? '?' + qs : ''}`;
-  const r = await fetch(url, { headers: { Cookie: cookie, Accept: 'application/json' } });
-  const text = await r.text();
+  let r, text;
+  for (let intento = 0; ; intento++) {
+    r = await fetch(url, { headers: { Cookie: cookie, Accept: 'application/json' } });
+    text = await r.text();
+    const ocupado = r.status === 403 && /pendiente/i.test(text);
+    if (!ocupado || intento >= 10) break;
+    await sleep(3000);
+  }
+  if (r.status === 403 && /pendiente/i.test(text)) {
+    throw new Error('Chess está procesando otra consulta de este usuario. Probá de nuevo en un minuto.');
+  }
   if (!r.ok) throw new Error(`Chess ${path} HTTP ${r.status}: ${text.slice(0, 200)}`);
   let data;
   try { data = JSON.parse(text); } catch { throw new Error(`Chess ${path} no devolvió JSON`); }
@@ -119,10 +132,9 @@ module.exports = async (req, res) => {
     const desde = hoy.slice(0, 8) + '01';
     const cookie = await login();
 
-    const [rutasRaw, ventas] = await Promise.all([
-      chessGet(cookie, '/rutasVenta/', { anulada: false }),
-      traerVentasMes(cookie, desde, hoy),
-    ]);
+    // En serie: Chess no acepta dos consultas simultáneas del mismo usuario.
+    const rutasRaw = await chessGet(cookie, '/rutasVenta/', { anulada: false });
+    const ventas = await traerVentasMes(cookie, desde, hoy);
     const rutas = findArray(rutasRaw);
 
     if (debug) {
