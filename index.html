@@ -1,31 +1,176 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Listado de no compradores de mes en curso</title>
-<link rel="stylesheet" href="styles.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>No compradores del mes</title>
+<style>
+  :root {
+    --bg: #f5f4f0; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e3e1db;
+    --accent: #c2410c; --accent-soft: #fde7da; --ok: #15803d; --bar: #ece9e2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --card: #201f1d; --ink: #eceae4; --muted: #a09d96; --line: #34322e;
+      --accent: #fb923c; --accent-soft: #3a2416; --ok: #4ade80; --bar: #2c2a27; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 20px 16px 8px; max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  main { max-width: 980px; margin: 0 auto; padding: 8px 16px 48px; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0; }
+  .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .kpi b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+  .kpi span { color: var(--muted); font-size: 12px; }
+  .tools { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+  .tools input, .tools select, .tools button {
+    font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); }
+  .tools input { flex: 1 1 220px; min-width: 0; }
+  .tools button { cursor: pointer; }
+  details.vend { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin: 10px 0; overflow: hidden; }
+  details.vend > summary { list-style: none; cursor: pointer; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+  details.vend > summary::-webkit-details-marker { display: none; }
+  .vname { font-weight: 600; flex: 1; min-width: 0; }
+  .count { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent); white-space: nowrap; }
+  .of { color: var(--muted); font-weight: 400; }
+  .bar { height: 6px; background: var(--bar); border-radius: 99px; overflow: hidden; width: 90px; flex: none; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .ruta { border-top: 1px solid var(--line); padding: 10px 16px 12px; }
+  .rhead { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+  .rname { font-weight: 600; }
+  .tag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 1px 8px; }
+  .rcount { margin-left: auto; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  ul.cli { list-style: none; margin: 0; padding: 0; columns: 2 280px; column-gap: 24px; }
+  ul.cli li { padding: 3px 0; break-inside: avoid; font-size: 14px; }
+  ul.cli code { color: var(--muted); font-size: 12px; margin-right: 6px; }
+  .done { color: var(--ok); font-size: 13px; }
+  .copy { font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+  .msg { padding: 24px; text-align: center; color: var(--muted); }
+  .err { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 10px; padding: 12px 14px; color: var(--ink); }
+  @media (max-width: 560px) { .kpis { grid-template-columns: 1fr 1fr; } .kpi:last-child { grid-column: span 2; } .bar { display: none; } }
+</style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>Listado de no compradores de mes en curso</h1>
-    <p>Los datos se obtienen en vivo desde el Google Sheet publicado. Se considera "no comprador" a todo cliente cuya columna "CCC x Bultos" está vacía.</p>
-  </header>
-
-  <div class="nav-row">
-    <a href="colonias.html">Ir a No compradores Las Colonias →</a>
+<header>
+  <h1>Clientes sin compra en el mes</h1>
+  <div class="sub" id="estado">Cargando datos de Chess…</div>
+</header>
+<main>
+  <div class="kpis">
+    <div class="kpi"><b id="kNo">–</b><span>sin compra</span></div>
+    <div class="kpi"><b id="kTot">–</b><span>clientes en ruta</span></div>
+    <div class="kpi"><b id="kPct">–</b><span>cobertura del mes</span></div>
   </div>
+  <div class="tools">
+    <input id="q" type="search" placeholder="Buscar cliente, código, vendedor o ruta…">
+    <select id="fuerza"><option value="">Todas las fuerzas de venta</option></select>
+    <button id="refresh" type="button">Actualizar</button>
+  </div>
+  <div id="lista"><div class="msg">Cargando…</div></div>
+</main>
+<script>
+const REFRESH_MS = 10 * 60 * 1000;
+let datos = null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = (n) => Number(n).toLocaleString('es-AR');
 
-  <section class="data-section" data-key="main" data-title="No compradores" data-endpoint="/api/sheet"></section>
+async function cargar() {
+  $('estado').textContent = 'Actualizando desde Chess…';
+  try {
+    const r = await fetch('/api/no-compradores', { cache: 'no-store' });
+    const j = await r.json();
+    if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
+    datos = j;
+    llenarFuerzas();
+    render();
+    const t = new Date(j.actualizado).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+    const [y, m] = j.periodo.desde.split('-');
+    $('estado').textContent = `Período ${m}/${y} (hasta ${j.periodo.hasta.split('-').reverse().join('/')}) · datos de Chess al ${t} · se actualiza solo cada 10 min`;
+  } catch (e) {
+    $('estado').textContent = 'No se pudo actualizar';
+    if (!datos) $('lista').innerHTML = `<div class="err"><b>Error al leer Chess:</b> ${esc(e.message)}</div>`;
+  }
+}
 
-  <footer>
-    Los datos se consultan a través de una función serverless (para evitar el bloqueo de CORS de Google).
-  </footer>
-</div>
+function llenarFuerzas() {
+  const sel = $('fuerza'), actual = sel.value;
+  const set = new Set();
+  datos.vendedores.forEach((v) => v.rutas.forEach((r) => r.fuerzaVentas && set.add(r.fuerzaVentas)));
+  sel.innerHTML = '<option value="">Todas las fuerzas de venta</option>' +
+    [...set].sort().map((f) => `<option${f === actual ? ' selected' : ''}>${esc(f)}</option>`).join('');
+}
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="app.js"></script>
+function render() {
+  if (!datos) return;
+  const q = $('q').value.trim().toLowerCase();
+  const fz = $('fuerza').value;
+  const abiertos = new Set([...document.querySelectorAll('details.vend[open]')].map((d) => d.dataset.id));
+  let totNo = 0, totCli = 0, html = '';
+
+  for (const v of datos.vendedores) {
+    const vMatch = q && v.nombre.toLowerCase().includes(q);
+    const rutas = [];
+    for (const r of v.rutas) {
+      if (fz && r.fuerzaVentas !== fz) continue;
+      const rMatch = vMatch || (q && String(r.nombre).toLowerCase().includes(q));
+      const clientes = !q || rMatch ? r.noCompradores
+        : r.noCompradores.filter((c) => c.razonSocial.toLowerCase().includes(q) || String(c.idCliente).includes(q));
+      if (q && !clientes.length) continue;
+      rutas.push({ ...r, clientes });
+    }
+    if (!rutas.length) continue;
+    const vNo = rutas.reduce((s, r) => s + r.clientes.length, 0);
+    const vTot = rutas.reduce((s, r) => s + r.totalClientes, 0);
+    totNo += vNo; totCli += vTot;
+    const pct = vTot ? Math.round((vNo / vTot) * 100) : 0;
+    const open = q || abiertos.has(v.idVendedor) ? ' open' : '';
+
+    html += `<details class="vend" data-id="${esc(v.idVendedor)}"${open}>
+      <summary><span class="vname">${esc(v.nombre)}</span>
+        <span class="bar" title="${pct}% sin compra"><i style="width:${pct}%"></i></span>
+        <span class="count">${fmt(vNo)} <span class="of">/ ${fmt(vTot)}</span></span></summary>`;
+    for (const r of rutas) {
+      html += `<div class="ruta"><div class="rhead">
+          <span class="rname">${esc(r.nombre)}</span>
+          ${r.modoAtencion ? `<span class="tag">${esc(r.modoAtencion)}</span>` : ''}
+          ${r.fuerzaVentas ? `<span class="tag">${esc(r.fuerzaVentas)}</span>` : ''}
+          <span class="rcount">${fmt(r.clientes.length)} sin compra de ${fmt(r.totalClientes)}</span>
+          ${r.clientes.length ? `<button class="copy" data-v="${esc(v.nombre)}" data-r="${esc(r.nombre)}">Copiar</button>` : ''}
+        </div>` +
+        (r.clientes.length
+          ? `<ul class="cli">${r.clientes.map((c) => `<li><code>${esc(c.idCliente)}</code>${esc(c.razonSocial)}</li>`).join('')}</ul>`
+          : `<div class="done">Todos los clientes de esta ruta ya compraron.</div>`) +
+        `</div>`;
+    }
+    html += `</details>`;
+  }
+
+  $('lista').innerHTML = html || '<div class="msg">No hay resultados para ese filtro.</div>';
+  $('kNo').textContent = fmt(totNo);
+  $('kTot').textContent = fmt(totCli);
+  $('kPct').textContent = totCli ? Math.round(((totCli - totNo) / totCli) * 100) + '%' : '–';
+}
+
+$('lista').addEventListener('click', async (e) => {
+  const b = e.target.closest('button.copy');
+  if (!b) return;
+  const lis = b.closest('.ruta').querySelectorAll('li');
+  const txt = `Sin compra este mes – ${b.dataset.v} – ${b.dataset.r}\n` +
+    [...lis].map((li) => '• ' + li.textContent.replace(/^(\S+)/, '$1 ')).join('\n');
+  try { await navigator.clipboard.writeText(txt); b.textContent = 'Copiado'; }
+  catch { b.textContent = 'No se pudo copiar'; }
+  setTimeout(() => (b.textContent = 'Copiar'), 1500);
+});
+$('q').addEventListener('input', render);
+$('fuerza').addEventListener('change', render);
+$('refresh').addEventListener('click', cargar);
+
+cargar();
+setInterval(cargar, REFRESH_MS);
+</script>
 </body>
 </html>
